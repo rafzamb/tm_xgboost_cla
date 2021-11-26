@@ -1,0 +1,89 @@
+---
+output: github_document
+---
+
+<!-- Ejemplo -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# tm_xgboost_cla
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+source("https://github.com/rafzamb/tm_xgboost_cla/raw/master/xgboost_tune_param.R")
+```
+
+
+```{r}
+# Particion
+cv_folds <- vfold_cv(iris, v = 2)
+
+#Recta
+Receta <- recipe(formula = Species ~ ., data =  iris)
+
+# Modelo
+xgb <- boost_tree(
+  tree_depth = tune(), 
+  mtry = tune(),
+  stop_iter = tune(),
+) %>% 
+  set_engine("xgboost", 
+             colsample_bytree = tune(),
+             lambda = tune(),
+             alpha = tune()
+  ) %>% 
+  set_mode("classification")
+
+#Workflow
+xgb_wf <- workflow() %>%
+  add_recipe(Receta) %>%
+  add_model(xgb)
+
+#Rango de parametros
+xgb_param <- 
+  xgb %>%
+  parameters() %>% 
+  update(mtry = mtry(c(2L, 3L)),
+         colsample_bytree = colsample_bytree(c(1L, 3L)),
+         lambda = penalty_L2(range = c(-10, -1)),
+         alpha = penalty_L1(range = c(-10, -1))
+  )
+```
+
+
+```{r, message = TRUE}
+#Control de optimizacion Bayes
+ctrl <- control_bayes(no_improve = 2, verbose = T, save_pred = T, seed = 123)
+
+
+xgb_res <- tune_bayes(xgb_wf, 
+                      resamples = cv_folds,
+                      iter = 3,
+                      param_info = xgb_param,
+                      metrics = metric_set(f_meas),
+                      control = ctrl,
+                      initial = 8
+)
+```
+
+
+```{r}
+autoplot(xgb_res) + theme(legend.position = "top")
+```
+
+
+
+
+
